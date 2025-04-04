@@ -32,6 +32,10 @@ MANIFEST
 *.manifest
 *.spec
 
+# Generated weights
+best_checkpoint.pt
+results/*
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
