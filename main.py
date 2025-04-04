@@ -32,17 +32,7 @@ import hiddenlayer as hl
 class DumbNNModel(nn.Module):
     def __init__(self):
         super(DumbNNModel, self).__init__()
-        
-        # Shared backbone
-        self.shared_layers = nn.Sequential(
-            nn.Linear(32, 16),  # Expand feature space
-            nn.LeakyReLU(),
-            nn.Linear(16, 1)
-
- 
- 
-        )
-        
+       
         # Output Head 1 (19004-dimensional)
         self.output_head_1 = nn.Sequential(
             nn.Linear(32, 20),
@@ -63,35 +53,7 @@ class DumbNNModel(nn.Module):
             #nn.Linear(4096, 19004)  # Final output size
             nn.Linear(16, 1)
         )
-       
-
-        #self.output_head_2 = nn.Sequential(
-        #    nn.Linear(512, 512),
-        #    nn.InstanceNorm1d(512),
-        #    nn.LeakyReLU(),
-        #    nn.Linear(512, 512),
-        #    nn.InstanceNorm1d(512),
-        #    nn.LeakyReLU(),
-        #    nn.Linear(512, 512),
-        #    nn.InstanceNorm1d(512),
-        #    nn.LeakyReLU(),
-        #    nn.Linear(512, 512),
-        #    nn.InstanceNorm1d(512),
-        #    nn.LeakyReLU(),
-        #    
-        #    #nn.Linear(4096, 19004)  # Final output size
-        #    nn.Linear(512, 20544)
-        #)
-
-
-        # Output Head 2 (20554-dimensional)
-        #self.output_head_2 = nn.Sequential(
-        #    nn.Linear(2048, 4096),
-        #    nn.InstanceNorm1d(4096),
-        #    nn.LeakyReLU(),
-        #    nn.Linear(4096, 20544)  # Final output size
-        #)
-
+      
     def forward(self, x):
         #print(x.dtype)
         x=x.float()
