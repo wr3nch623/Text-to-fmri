@@ -31,28 +31,52 @@ import transformers
 from torchviz import make_dot
 import hiddenlayer as hl
 
-       
+class BasicBlock(nn.Module):
+    def __init__(self, levelDIM, outputDIM):
+        super(BasicBlock, self).__init__()
+
+        self.lin1 = nn.Linear(levelDIM, levelDIM)
+        self.relu = nn.LeakyReLU()
+
+        self.bn1 = nn.BatchNorm1d(levelDIM)
+        self.lin2 = nn.Linear(levelDIM, levelDIM)
+        self.relu2 = nn.LeakyReLU()
+        self.bn2 = nn.BatchNorm1d(levelDIM)
+
+        self.weight = nn.Parameter(torch.randn(1, requires_grad=True))
+
+    def forward(self, x):
+        initial = x
+        x = self.lin1(x)
+        
+        x = self.bn1(x)
+        x = self.relu(x)
+        x = self.lin2(x)
+        x = self.bn2(x)
+        x += initial
+        x = self.relu2(x)
+
+        return x
+
 
 class DumbNNModel(nn.Module):
-    def __init__(self, hiddenDIM, outputDIM):
+    def __init__(self, hiddenDIM, levelDIM, outputDIM):
         super(DumbNNModel, self).__init__()
         
         layers = []
 
         layers.append(nn.Linear(32, 64))
-        layers.append(nn.ReLU())
-        layers.append(nn.Linear(64, 128))
-        layers.append(nn.ReLU())
+        layers.append(nn.LeakyReLU())
+        layers.append(nn.Linear(64, levelDIM))
+        layers.append(nn.LeakyReLU())
 
 
         for i in range(hiddenDIM):
-            layers.append(nn.Linear(128, 128))
-            layers.append(nn.ReLU())
+            layers.append(BasicBlock(levelDIM, levelDIM))
+            #if i % 5 == 0 and i > 4:
+            #    layers.append(nn.BatchNorm1d(128))
 
-            if i % 5 == 0 and i > 4:
-                layers.append(nn.BatchNorm1d(128))
-
-        layers.append(nn.Linear(128, outputDIM))
+        layers.append(nn.Linear(levelDIM, outputDIM))
 
         self.output_head_1 = nn.Sequential(*layers)
         
@@ -106,14 +130,14 @@ def generate_loss_graph(loss, filename):
 
     fig, axs = plt.subplots(2, 1, figsize=(10, 5))
 
-    axs[0].plot(loss, label='Loss per Batch')
+    axs[0].plot(loss[100:], label='Loss per Batch')
     axs[0].set_xlabel('Batch Number')
     axs[0].set_ylabel('Loss')
     axs[0].set_title('Loss per Batch during Training')
     axs[0].legend()
     axs[0].grid()
 
-    axs[1].plot(logloss, label='Logarithmic loss per Batch')
+    axs[1].plot(logloss[100:], label='Logarithmic loss per Batch')
     axs[1].set_xlabel('Batch Number')
     axs[1].set_ylabel('Logarithmic loss')
     axs[1].set_title('Logarithmic loss per Batch during Training')
@@ -185,7 +209,7 @@ def main():
     print(f'len first roi: {len(lh_roi_masks[0])}')
 
     #debug
-    gradPrint = True
+    gradPrint = False
     debug = True
     allloss = []
     print(lh_fmri)
@@ -200,7 +224,7 @@ def main():
     print(ds)
 
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    model = DumbNNModel(2, len(lh_roi_masks[0]))
+    model = DumbNNModel(1, 64,len(lh_roi_masks[0]))
 
     loss_fn1 = nn.L1Loss()
     loss_fn2 = nn.L1Loss()
@@ -209,7 +233,7 @@ def main():
     
     #optimizer = optim.AdamW(model.parameters(), lr=0.5, maximize = False)
     #optimizer = optim.AdamW(model.parameters(), lr=0.05, maximize = False)
-    optimizer = optim.AdamW(model.parameters(), lr=0.005, maximize = False)
+    optimizer = optim.AdamW(model.parameters(), lr=1e-4, maximize = False)
 
     config = transformers.CLIPTextConfig()
     tokenizer = CLIPProcessor.from_pretrained("openai/clip-vit-base-patch32")
@@ -231,7 +255,7 @@ def main():
     num_epochs = 200
     
     
-    scheduler = StepLR(optimizer, step_size=4, gamma=0.1) 
+    scheduler = StepLR(optimizer, step_size=4, gamma=0.5) 
     #scheduler = ExponentialLR(optimizer, gamma=0.5) 
 
     print('training start')
@@ -244,7 +268,6 @@ def main():
             #print(cap)
             lh_fmri_c = lh_fmri_c.to(device)
             cap = cap.squeeze(1)
-            #lh_fmri_c = lh_fmri_c.unsqueeze(1)
             
 
             output1 = model(cap)
@@ -261,8 +284,9 @@ def main():
             optimizer.step()
             
             allloss.append(loss.item())
-            #print(output1)
-            #print(lh_fmri_c)
+            print(f'output: {output1}')
+            print(lh_fmri_c)
+            print()
             #break
 
             #early stopping: need to implement validation set to use it correctly, for now it will be only on training set
@@ -274,24 +298,24 @@ def main():
             else:
                 epochs_without_improvement += 1
 
-            print(f'output : {output1}')
+            #print(f'output : {output1}')
             
 
 
-            if debug:
-                for i in range(len(lh_fmri_c)):
-                    #ot = output1.cpu().detach().numpy()[i][0][0]
-                    #ot = float(output1.cpu().detach().numpy()[i])
-                    ot = output1.cpu().detach().numpy()[i][0]
-                    ac = lh_fmri_c.cpu().detach().numpy()[i][0]
-                    temp = output1.cpu().detach()
-                    #print(output1)
-                    #print(lh_fmri_c)
-                    #if(abs(ot - ac) >= 0.5):
+            #if debug:
+            #    for i in range(len(lh_fmri_c)):
+            #        #ot = output1.cpu().detach().numpy()[i][0][0]
+            #        #ot = float(output1.cpu().detach().numpy()[i])
+            #        ot = output1.cpu().detach().numpy()[i]
+            #        ac = lh_fmri_c.cpu().detach().numpy()[i]
+            #        temp = output1.cpu().detach()
+            #        #print(output1)
+            #        #print(lh_fmri_c)
+            #        #if(abs(ot - ac) >= 0.5):
 
-                    #    print(f'(*) output: {ot:4}, actual: {ac:4}')
-                    #else:
-                    print(f'output: {ot:4}, actual: {ac:4}')
+            #        #    print(f'(*) output: {ot:4}, actual: {ac:4}')
+            #        #else:
+            #        print(f'output: {ot}, actual: {ac}')
 
             print(f'loss: {loss:4f}')
 
@@ -312,12 +336,14 @@ def main():
             print(f'Final epoch : {epoch}')
             break
 
-        scheduler.step()
+        #scheduler.step()
         print()
         print(epoch)
         print()
 
     print("Training complete!")
+
+    #print(allloss)
 
     generate_loss_graph(allloss, 'training_loss.png')
 
@@ -337,11 +363,14 @@ def main():
         lh_fmri_c = lh_fmri_c.to(device)
         cap = cap.squeeze(1)
 
-        lh_fmri_c = lh_fmri_c.unsqueeze(1)
-        print(cap.shape)
+        #lh_fmri_c = lh_fmri_c.unsqueeze(1)
         
 
         output1 = model(cap)
+        
+        print(lh_fmri_c.shape)
+        print(output1.shape)
+
         optimizer.zero_grad()
         loss1 = loss_fn1(output1, lh_fmri_c)
         #ot = output1.cpu().detach().numpy()[0][0][0]
@@ -361,14 +390,14 @@ def main():
                 temp = output1.cpu().detach()
                 #print(output1)
                 #print(lh_fmri_c)
-                if(abs(ot - ac) >= 0.5):
+                #if(abs(ot - ac) >= 0.5):
 
-                    print(f'(*) output: {ot:4}, actual: {ac:4}')
-                else:
-                    print(f'output: {ot:4}, actual: {ac:4}')
+                #    print(f'(*) output: {ot:4}, actual: {ac:4}')
+                #else:
+                #    print(f'output: {ot:4}, actual: {ac:4}')
 
             print(f'loss: {loss:4f}')
-
+    print(val_loss)
     generate_loss_graph(val_loss, 'validation_loss.png')
 
 
