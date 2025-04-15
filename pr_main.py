@@ -209,13 +209,13 @@ def main():
     print(f'len first roi: {len(lh_roi_masks[0])}')
 
     #debug
-    gradPrint = False
+    gradPrint = True
     debug = True
     allloss = []
     print(lh_fmri)
 
     #early stopping
-    patience = 700
+    patience = 50
     best_loss = 9999999
     epochs_without_improvement = 0
 
